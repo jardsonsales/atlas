@@ -77,13 +77,13 @@ atlas/
   - `Settings` — global Atlas preferences persisted between runs (currently only the certbot contact e-mail); `NewSettings(...)` validates the optional address (`ErrInvalidCertbotEmail`) and `HasCertbotEmail()` reports whether the certificate should be issued with `-m <email>` instead of `--register-unsafely-without-email`.
 - **`contracts/`:** Contains interfaces for:
   - Repositories (e.g., `DomainRepository`, `DomainConfigRepository`, `SettingsRepository`)
-  - Use Cases (e.g., `ListDomainsUseCase`, `SelectDomainUseCase`, `DetectWebServerUseCase`, `AuditDomainUseCase`, `GetDomainConfigUseCase`, `SaveDomainConfigUseCase`, `GetSettingsUseCase`, `SaveSettingsUseCase`, `RenderProvisioningUseCase`, `AllocateOperationPortUseCase`, `ApplyProvisioningUseCase`)
-  - System abstractions (e.g., `PathResolver`, `WebServerProbe`, `DomainInspector`, `VHostRenderer`, `SystemdRenderer`, `DomainEnvWriter`, `ProvisioningApplier`)
+  - Use Cases (e.g., `ListDomainsUseCase`, `SelectDomainUseCase`, `DetectWebServerUseCase`, `AuditDomainUseCase`, `GetDomainConfigUseCase`, `SaveDomainConfigUseCase`, `GetSettingsUseCase`, `SaveSettingsUseCase`, `RenderProvisioningUseCase`, `AllocateOperationPortUseCase`, `ApplyProvisioningUseCase`, `RestartDomainServiceUseCase`)
+  - System abstractions (e.g., `PathResolver`, `WebServerProbe`, `DomainInspector`, `VHostRenderer`, `SystemdRenderer`, `DomainEnvWriter`, `ProvisioningApplier`, `ServiceController`)
 
 ### Application Layer (`internal/application/usecases/`)
 - Implements the Use Case interfaces defined in `internal/domain/contracts`.
 - Depends **only** on `internal/domain/contracts` and `internal/domain/entities`.
-- Current use cases: `ListDomains`, `SelectDomain`, `DetectWebServer`, `AuditDomain`, `GetDomainConfig`, `SaveDomainConfig`, `GetSettings`, `SaveSettings`, `RenderProvisioning`, `AllocateOperationPort`, `ApplyProvisioning`.
+- Current use cases: `ListDomains`, `SelectDomain`, `DetectWebServer`, `AuditDomain`, `GetDomainConfig`, `SaveDomainConfig`, `GetSettings`, `SaveSettings`, `RenderProvisioning`, `AllocateOperationPort`, `ApplyProvisioning`, `RestartDomainService`.
 - Every new feature or operation must have a dedicated Use Case and unit tests (`*_test.go`).
 
 ### Infrastructure Layer (`internal/infrastructure/`)
@@ -105,6 +105,7 @@ atlas/
   - `WebServerProbe` implements `WebServerProbe`, detecting the installed web server via systemd units, binaries and config directories, and parsing the version from the server binary (`-v`).
   - **In sandbox mode it always pretends Nginx is installed and running**, so the whole UI flow can be exercised locally.
   - `ProvisioningApplier` implements `ProvisioningApplier`, wiring a rendered plan to the host: it writes the vhost into `sites-available` (via `PathResolver`), (re)creates the `sites-enabled` symlink, runs the web server config test (`nginx -t` / `apachectl -t`) and reloads it through `systemctl`, installs the backend unit into `/etc/systemd/system` (`daemon-reload`, `enable`, `restart`) and issues the certificate with certbot (`--nginx` / `--apache`, `--non-interactive --agree-tos --redirect`, plus `-m <settings certbot email>` or `--register-unsafely-without-email`). A failed config test removes the symlink so a broken vhost never reaches the running server. **All external commands run through an internal `commandRunner` interface using `exec.CommandContext` with fixed argument lists (never a shell).** In sandbox mode no command is executed (each is reported as a skipped step) but the files and symlinks are still written to the fake root.
+  - `ServiceController` implements `ServiceController`, restarting the backend systemd unit of a domain (`systemctl restart <domain>.service`, unit name from `entities.UnitNameFor`) so a deploy picks up a new build. It returns a single-step `ProvisioningResult`, runs through the same `commandRunner` (never a shell) and reports a skipped step in sandbox mode. It backs the non-interactive `atlas --restart <domain>` mode wired in `main.go`.
 
 ### UI Layer (`internal/ui/`)
 - Built with `github.com/charmbracelet/bubbletea` and `github.com/charmbracelet/lipgloss`.
@@ -132,6 +133,15 @@ atlas/
 3. Selecting a domain runs the **domain audit** and renders the provisioning checks (ready to use, vhost, active, HTTPS).
 4. Pressing `c` on the domain detail opens the **Domain Config** form, where the user picks the connection type, vhost model, max body size, reverse proxy entry point, the "Behind a proxy" toggle (trust upstream `X-Forwarded-*`, default off; shown for reverse proxy and PHP-FPM socket models) and backend systemd unit; `p` renders a preview and `s` persists it to the config store. For reverse proxy models Atlas also auto-assigns the operation port (shown read-only) and mirrors it into the domain `.env`.
 5. Back on the domain detail, pressing `a` applies the saved plan through the `ApplyProvisioningUseCase` (renders the preview and delegates to the `ProvisioningApplier`), showing the per-step result (applied / skipped / failed), then re-audits the domain. Applying requires a saved configuration; otherwise Atlas asks to save one first with `c`.
+
+### Non-interactive Restart
+Besides the TUI, Atlas exposes a one-shot mode for deploy pipelines:
+
+```sh
+atlas --restart <domain>
+```
+
+Wired in `main.go`, it runs the `RestartDomainServiceUseCase` (`ServiceController`) to restart `<domain>.service` without touching the vhost, TLS certificate or `.env`, prints the step result and exits non-zero on failure. It is the recommended final step of a deploy for reverse-proxy apps; the application-facing contract is documented in `EXPLAIN.md`.
 
 ### Environment Variables
 - `ATLAS_ROOT_DIR`: Root filesystem the `PathResolver` maps virtual paths onto. Defaults to `/` (production); set it to `./dev/fake_root` (as the `run`/`dev` Makefile targets do) to use the development sandbox.

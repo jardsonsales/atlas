@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"atlas/internal/application/usecases"
 	"atlas/internal/domain/contracts"
+	"atlas/internal/domain/entities"
 	"atlas/internal/infrastructure/filesystem"
 	"atlas/internal/infrastructure/rendering"
 	"atlas/internal/infrastructure/repositories/fsrepo"
@@ -17,6 +19,12 @@ import (
 )
 
 func main() {
+	// Non-interactive mode: `atlas --restart <domain>` restarts a domain's backend systemd unit
+	// without launching the TUI, so deploy pipelines can reload the service after shipping a
+	// new build. Without the flag Atlas launches the interactive control plane.
+	restartDomain := flag.String("restart", "", "restart the backend systemd unit of the given domain and exit")
+	flag.Parse()
+
 	ctx := context.Background()
 
 	// Resolve root filesystem path:
@@ -42,6 +50,7 @@ func main() {
 	vhostRenderer := rendering.NewVHostRenderer()
 	systemdRenderer := rendering.NewSystemdRenderer()
 	provisioningApplier := system.NewProvisioningApplier(pathResolver)
+	serviceController := system.NewServiceController(pathResolver)
 
 	// 2. Application Layer (implements use case contracts)
 	detectWebServerUC := usecases.NewDetectWebServerUseCase(webServerProbe)
@@ -55,6 +64,13 @@ func main() {
 	saveSettingsUC := usecases.NewSaveSettingsUseCase(settingsRepo)
 	renderProvisionUC := usecases.NewRenderProvisioningUseCase(vhostRenderer, systemdRenderer)
 	applyProvisionUC := usecases.NewApplyProvisioningUseCase(renderProvisionUC, provisioningApplier, getSettingsUC)
+	restartServiceUC := usecases.NewRestartDomainServiceUseCase(serviceController)
+
+	// Non-interactive restart (used by deploy pipelines) short-circuits the TUI.
+	if *restartDomain != "" {
+		runRestart(ctx, restartServiceUC, *restartDomain)
+		return
+	}
 
 	// 3. Presentation / UI Layer (consumes only contracts)
 	rootModel := app.NewRootModel(
@@ -105,4 +121,35 @@ func resolveConfigDir(resolver contracts.PathResolver) string {
 		return filepath.Join(dir, "atlas")
 	}
 	return filepath.Join(".", ".config", "atlas")
+}
+
+// runRestart executes the non-interactive `atlas --restart <domain>` mode: it restarts the
+// domain's backend systemd unit, prints the resulting step and exits with a non-zero status on
+// any failure so a deploy pipeline can abort.
+func runRestart(ctx context.Context, uc contracts.RestartDomainServiceUseCase, domain string) {
+	result, err := uc.Execute(ctx, domain)
+	if result != nil {
+		for _, step := range result.Steps() {
+			fmt.Printf("%s %s (%s)\n", stepGlyph(step.Status()), step.Label(), step.Detail())
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to restart %q: %v\n", domain, err)
+		os.Exit(1)
+	}
+	if result == nil || !result.Succeeded() {
+		os.Exit(1)
+	}
+}
+
+// stepGlyph renders a compact status marker for the non-interactive output.
+func stepGlyph(status entities.StepStatus) string {
+	switch status {
+	case entities.StepApplied:
+		return "✓"
+	case entities.StepSkipped:
+		return "•"
+	default:
+		return "✗"
+	}
 }

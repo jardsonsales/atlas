@@ -251,8 +251,13 @@ func (c *DomainConfig) vhostBaseDir() string {
 	return "/etc/nginx"
 }
 
+// UnitNameFor returns the conventional systemd unit name of a domain, e.g.
+// "nexus.example.com.service". It is the single convention shared by the provisioning
+// applier and the non-interactive `atlas --restart <domain>` mode.
+func UnitNameFor(domain string) string { return domain + ".service" }
+
 // SuggestedUnitName returns the conventional systemd unit name for the domain.
-func (c *DomainConfig) SuggestedUnitName() string { return c.domain + ".service" }
+func (c *DomainConfig) SuggestedUnitName() string { return UnitNameFor(c.domain) }
 
 // isValidEntryPoint validates a reverse proxy target in "host:port" form.
 func isValidEntryPoint(value string) bool {

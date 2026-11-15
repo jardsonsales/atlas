@@ -71,6 +71,17 @@ From the domain list press `s` to open **Settings**, where you can set the certb
 e-mail used to register the TLS certificate. Leave it empty and Atlas registers with
 `--register-unsafely-without-email`; fill it in and it is passed to certbot as `-m <email>`.
 
+Deploys can reload a domain's backend without opening the TUI:
+
+```sh
+sudo atlas --restart nexus.example.com
+```
+
+It restarts the backend systemd unit (`systemctl restart <domain>.service`) — leaving the vhost,
+TLS certificate and `.env` untouched — and exits non-zero if the restart fails, so it can be the
+last step of a deploy pipeline. Preparing an application for Atlas is documented in
+[EXPLAIN.md](EXPLAIN.md).
+
 Environment variables:
 
 | Variable           | Purpose                                                          |
