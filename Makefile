@@ -20,9 +20,9 @@ run:
 dev: build
 	@ATLAS_ROOT_DIR=$(SANDBOX_DIR) ./$(BUILD_DIR)/$(BINARY_NAME)
 
-## prod: Run application pointing to real host filesystem (/)
+## prod: Build and run against the real host filesystem (/) (requires root)
 prod: build
-	@ATLAS_ENV=production ./$(BUILD_DIR)/$(BINARY_NAME)
+	@./$(BUILD_DIR)/$(BINARY_NAME)
 
 ## test: Execute automated unit tests
 test:

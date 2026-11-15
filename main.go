@@ -20,8 +20,9 @@ func main() {
 	ctx := context.Background()
 
 	// Resolve root filesystem path:
-	// - In production, set ATLAS_ROOT_DIR="/" (or ATLAS_ENV="production") to use real /var/www, /etc/nginx, etc.
-	// - In development (default), uses "./dev/fake_root" sandbox and automatically seeds sample folders/files.
+	// - By default Atlas runs against the real host root ("/"), i.e. production.
+	// - Development uses the "./dev/fake_root" sandbox by setting ATLAS_ROOT_DIR explicitly
+	//   (see the `run`/`dev` Makefile targets), which also auto-seeds sample folders/files.
 	rootDir := resolveRootDir()
 	pathResolver := filesystem.NewPathResolver(rootDir)
 
@@ -73,14 +74,14 @@ func main() {
 	}
 }
 
+// resolveRootDir returns the root the PathResolver maps virtual paths onto. Atlas runs in
+// production (real host root) by default; setting ATLAS_ROOT_DIR switches it to a different
+// root, which is how the development sandbox (dev/fake_root) is selected.
 func resolveRootDir() string {
 	if customRoot := os.Getenv("ATLAS_ROOT_DIR"); customRoot != "" {
 		return customRoot
 	}
-	if os.Getenv("ATLAS_ENV") == "production" {
-		return "/"
-	}
-	return "./dev/fake_root"
+	return "/"
 }
 
 // resolveConfigDir locates the Atlas configuration store (domains.json):

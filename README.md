@@ -45,20 +45,25 @@ sha256sum -c checksums.txt --ignore-missing
 
 ## Usage
 
-Atlas inspects the real host filesystem only when told to. Start it in production mode:
+Atlas operates on the real host filesystem by default:
 
 ```sh
-sudo ATLAS_ENV=production atlas
+sudo atlas
 ```
 
-Run without `ATLAS_ENV=production` and Atlas boots against the bundled development sandbox
-(`./dev/fake_root`) instead of the real system, which is handy for trying it out safely.
+Root privileges are required when applying a plan, since Atlas writes under `/etc` (vhosts and
+systemd units). Development boots against the bundled sandbox (`./dev/fake_root`) instead by
+setting `ATLAS_ROOT_DIR`, which is what `make run` / `make dev` do:
+
+```sh
+ATLAS_ROOT_DIR=./dev/fake_root atlas
+```
 
 On the domain detail screen press `c` to compose the provisioning plan (vhost model, max body
 size, reverse proxy entry point, backend systemd unit), `s` to save it, `p` to preview the
 rendered vhost and unit, and `a` to apply it. Applying writes the vhost to `sites-available`,
 links it in `sites-enabled`, reloads the web server after a successful config test, requests
-the TLS certificate with certbot and installs/enables the backend systemd unit. In sandbox mode
+the TLS certificate with certbot and installs/enables the backend systemd unit. In the sandbox
 the filesystem changes are still written, but the `nginx`/`apachectl`/`systemctl`/`certbot`
 commands are skipped.
 
@@ -66,9 +71,8 @@ Environment variables:
 
 | Variable              | Purpose                                                                        |
 | --------------------- | ------------------------------------------------------------------------------ |
-| `ATLAS_ENV`           | Set to `production` to operate on the real root (`/`).                          |
-| `ATLAS_ROOT_DIR`      | Override the root filesystem path explicitly.                                   |
-| `ATLAS_CONFIG_DIR`    | Override the config store (defaults to `~/.config/atlas` in production).        |
+| `ATLAS_ROOT_DIR`      | Root filesystem Atlas maps virtual paths onto (defaults to `/`).                  |
+| `ATLAS_CONFIG_DIR`    | Override the config store (defaults to `~/.config/atlas`).                       |
 | `ATLAS_CERTBOT_EMAIL` | Registration email passed to certbot (`-m`); without it Atlas uses `--register-unsafely-without-email`. |
 | `CLICOLOR_FORCE`      | Set to `1` to force colors over SSH or in CI.                                   |
 

@@ -132,8 +132,7 @@ atlas/
 5. Back on the domain detail, pressing `a` applies the saved plan through the `ApplyProvisioningUseCase` (renders the preview and delegates to the `ProvisioningApplier`), showing the per-step result (applied / skipped / failed), then re-audits the domain. Applying requires a saved configuration; otherwise Atlas asks to save one first with `c`.
 
 ### Environment Variables
-- `ATLAS_ROOT_DIR`: Overrides the root filesystem path (defaults to `./dev/fake_root` in development).
-- `ATLAS_ENV=production`: Forces `PathResolver` to use the real host root `/` unless `ATLAS_ROOT_DIR` is explicitly set.
+- `ATLAS_ROOT_DIR`: Root filesystem the `PathResolver` maps virtual paths onto. Defaults to `/` (production); set it to `./dev/fake_root` (as the `run`/`dev` Makefile targets do) to use the development sandbox.
 - `ATLAS_CONFIG_DIR`: Overrides the configuration store directory (defaults to `~/.config/atlas` in production, `dev/fake_root/.config/atlas` in sandbox).
 - `ATLAS_CERTBOT_EMAIL`: Optional contact e-mail passed to certbot (`-m`) when issuing the certificate; without it Atlas registers with `--register-unsafely-without-email`.
 - `CLICOLOR_FORCE=1`: Forces ANSI colors when `termenv` cannot auto-detect color support (e.g., SSH sessions, CI, or non-TTY capture). Useful when running or screenshotting the app outside a fully-featured terminal.
@@ -157,7 +156,7 @@ When a new task requires reading or modifying system files (e.g., Nginx/Apache c
 - `make build` — Compile the binary to `./bin/atlas`.
 - `make run` — Run in development sandbox mode (`./dev/fake_root`).
 - `make dev` — Build binary to `./bin/atlas` and run in sandbox mode.
-- `make prod` — Build and run pointing to the real host filesystem (`/`).
+- `make prod` — Build and run against the real host filesystem (`/`) (requires root).
 - `make test` — Run all unit tests (`go test -v ./...`).
 - `make vet` / `make fmt` / `make tidy` — Code quality and module maintenance.
 - `make clean` — Remove compiled binaries.
