@@ -51,10 +51,10 @@ func TestDomainConfigRepositoryPersistsAndUpdates(t *testing.T) {
 	}
 
 	disabled := entities.DefaultSystemdService()
-	if err := repo.Save(ctx, buildConfig(t, "alpha.example.com", "127.0.0.1:4001", 4000, disabled)); err != nil {
+	if err := repo.Save(ctx, buildConfig(t, "alpha.example.com", "bin/server", 4000, disabled)); err != nil {
 		t.Fatalf("failed to save first config: %v", err)
 	}
-	if err := repo.Save(ctx, buildConfig(t, "beta.example.com", "127.0.0.1:4002", 4001, disabled)); err != nil {
+	if err := repo.Save(ctx, buildConfig(t, "beta.example.com", "bin/server", 4001, disabled)); err != nil {
 		t.Fatalf("failed to save second config: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestDomainConfigRepositoryPersistsAndUpdates(t *testing.T) {
 	}
 
 	// Upsert: saving the same domain again must replace, not duplicate.
-	if err := repo.Save(ctx, buildConfig(t, "alpha.example.com", "127.0.0.1:9000", 4000, disabled)); err != nil {
+	if err := repo.Save(ctx, buildConfig(t, "alpha.example.com", "cmd/app", 4000, disabled)); err != nil {
 		t.Fatalf("failed to update config: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestDomainConfigRepositoryPersistsAndUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload config: %v", err)
 	}
-	if found.EntryPoint() != "127.0.0.1:9000" {
+	if found.EntryPoint() != "cmd/app" {
 		t.Errorf("expected updated entry point, got %s", found.EntryPoint())
 	}
 

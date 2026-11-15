@@ -49,7 +49,7 @@ func applierFixture(t *testing.T, systemd entities.SystemdService) (*fsProvision
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		10*1024*1024,
-		"127.0.0.1:4001",
+		"bin/server",
 		4000,
 		false,
 		false,
@@ -75,7 +75,7 @@ func TestProvisioningApplierAppliesVHostHTTPSAndSystemd(t *testing.T) {
 	ctx := context.Background()
 
 	systemd, err := entities.NewSystemdService(
-		true, "4001 - nexus", "/usr/local/bin/nexus", "/opt/nexus",
+		true, "4001 - nexus", "/opt/nexus",
 		"/etc/nexus.env", "www-data", "www-data", "always", 5, "50M",
 	)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestProvisioningApplierSandboxSkipsCommands(t *testing.T) {
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		10*1024*1024,
-		"127.0.0.1:4001",
+		"bin/server",
 		4000,
 		false,
 		false,

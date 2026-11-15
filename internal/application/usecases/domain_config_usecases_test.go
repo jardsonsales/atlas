@@ -23,7 +23,7 @@ func newDomainConfigFixture(t *testing.T, domain string, port int, systemd entit
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		10*1024*1024,
-		"127.0.0.1:4001",
+		"bin/server",
 		port,
 		false,
 		false,
@@ -52,7 +52,7 @@ func TestDomainConfigSaveGetAndRender(t *testing.T) {
 	)
 
 	systemd, err := entities.NewSystemdService(
-		true, "4001 - nexus", "/usr/local/bin/nexus", "/opt/nexus",
+		true, "4001 - nexus", "/opt/nexus",
 		"/etc/nexus.env", "www-data", "www-data", "always", 5, "50M",
 	)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestDomainConfigSaveGetAndRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload config: %v", err)
 	}
-	if reloaded.EntryPoint() != "127.0.0.1:4001" {
+	if reloaded.EntryPoint() != "bin/server" {
 		t.Errorf("expected entry point to round-trip, got %s", reloaded.EntryPoint())
 	}
 	if reloaded.OperationPort() != entities.OperationPortBase {
@@ -92,8 +92,11 @@ func TestDomainConfigSaveGetAndRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to render provisioning: %v", err)
 	}
-	if !strings.Contains(preview.VHost(), "proxy_pass http://127.0.0.1:4001;") {
+	if !strings.Contains(preview.VHost(), "proxy_pass http://127.0.0.1:4000;") {
 		t.Errorf("expected vhost preview to contain proxy_pass, got:\n%s", preview.VHost())
+	}
+	if !strings.Contains(preview.Systemd(), "ExecStart=/var/www/nexus.example.com/bin/server") {
+		t.Errorf("expected systemd preview to contain the derived ExecStart, got:\n%s", preview.Systemd())
 	}
 	if !strings.Contains(preview.Systemd(), "MemoryMax=50M") {
 		t.Errorf("expected systemd preview to contain MemoryMax, got:\n%s", preview.Systemd())

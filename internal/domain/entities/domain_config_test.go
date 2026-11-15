@@ -30,7 +30,7 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			connection: entities.ConnectionReverseProxy,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    10 * 1024 * 1024,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       4000,
 		},
 		{
@@ -40,7 +40,7 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			connection: entities.ConnectionReverseProxy,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    10 * 1024 * 1024,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       4000,
 			wantErr:    entities.ErrInvalidDomainConfigDomain,
 		},
@@ -56,13 +56,24 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			wantErr:    entities.ErrInvalidDomainConfigEntryPoint,
 		},
 		{
+			name:       "entry point with path traversal",
+			domain:     "nexus.example.com",
+			kind:       entities.WebServerNginx,
+			connection: entities.ConnectionReverseProxy,
+			model:      entities.ModelNginxReverseProxy,
+			maxBody:    10 * 1024 * 1024,
+			entryPoint: "../../bin/server",
+			port:       4000,
+			wantErr:    entities.ErrInvalidDomainConfigEntryPoint,
+		},
+		{
 			name:       "operation port above the maximum",
 			domain:     "nexus.example.com",
 			kind:       entities.WebServerNginx,
 			connection: entities.ConnectionReverseProxy,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    10 * 1024 * 1024,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       70000,
 			wantErr:    entities.ErrInvalidDomainConfigPort,
 		},
@@ -73,7 +84,7 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			connection: entities.ConnectionSocket,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    10 * 1024 * 1024,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       4000,
 			wantErr:    entities.ErrInvalidDomainConfigModel,
 		},
@@ -84,7 +95,7 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			connection: entities.ConnectionReverseProxy,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    10 * 1024 * 1024,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       4000,
 			wantErr:    entities.ErrInvalidDomainConfigModel,
 		},
@@ -95,7 +106,7 @@ func TestNewDomainConfigValidatesInvariants(t *testing.T) {
 			connection: entities.ConnectionReverseProxy,
 			model:      entities.ModelNginxReverseProxy,
 			maxBody:    0,
-			entryPoint: "127.0.0.1:4001",
+			entryPoint: "bin/server",
 			port:       4000,
 			wantErr:    entities.ErrInvalidDomainConfigMaxBody,
 		},
@@ -135,7 +146,7 @@ func TestDomainConfigFormatsMaxBodySizePerServer(t *testing.T) {
 
 	nginx, err := entities.NewDomainConfig(
 		"nexus.example.com", entities.WebServerNginx, entities.ConnectionReverseProxy,
-		entities.ModelNginxReverseProxy, 10*1024*1024, "127.0.0.1:4001", 0, false, false, "", disabled,
+		entities.ModelNginxReverseProxy, 10*1024*1024, "bin/server", 0, false, false, "", disabled,
 	)
 	if err != nil {
 		t.Fatalf("failed to build nginx config: %v", err)
@@ -146,7 +157,7 @@ func TestDomainConfigFormatsMaxBodySizePerServer(t *testing.T) {
 
 	apache, err := entities.NewDomainConfig(
 		"nexus.example.com", entities.WebServerApache, entities.ConnectionReverseProxy,
-		entities.ModelApacheReverseProxy, 10*1024*1024, "127.0.0.1:4001", 0, false, false, "", disabled,
+		entities.ModelApacheReverseProxy, 10*1024*1024, "bin/server", 0, false, false, "", disabled,
 	)
 	if err != nil {
 		t.Fatalf("failed to build apache config: %v", err)
@@ -164,7 +175,7 @@ func TestDomainConfigOperationPort(t *testing.T) {
 
 	proxy, err := entities.NewDomainConfig(
 		"nexus.example.com", entities.WebServerNginx, entities.ConnectionReverseProxy,
-		entities.ModelNginxReverseProxy, 10*1024*1024, "127.0.0.1:4000", 0, false, false, "", disabled,
+		entities.ModelNginxReverseProxy, 10*1024*1024, "bin/server", 0, false, false, "", disabled,
 	)
 	if err != nil {
 		t.Fatalf("failed to build proxy config: %v", err)
@@ -179,6 +190,14 @@ func TestDomainConfigOperationPort(t *testing.T) {
 	}
 	if withPort.OperationPort() != 4001 {
 		t.Errorf("expected operation port 4001, got %d", withPort.OperationPort())
+	}
+	// The reverse proxy target is always derived from the loopback operation port, and the
+	// ExecStart is built from the entry point binary resolved against the domain root.
+	if got := withPort.ProxyTarget(); got != "127.0.0.1:4001" {
+		t.Errorf("expected proxy target 127.0.0.1:4001, got %s", got)
+	}
+	if got := withPort.ResolvedExecStart(); got != "/var/www/nexus.example.com/bin/server" {
+		t.Errorf("unexpected resolved ExecStart: %s", got)
 	}
 
 	socket, err := entities.NewDomainConfig(

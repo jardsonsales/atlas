@@ -68,7 +68,6 @@ type ConfigForm struct {
 	phpVersion      string
 	systemdEnabled  bool
 	description     string
-	execStart       string
 	workingDir      string
 	environmentFile string
 	sysUser         string
@@ -156,7 +155,6 @@ func (f *ConfigForm) applyDefaults() {
 	defaults := entities.DefaultSystemdService()
 	f.systemdEnabled = false
 	f.description = f.domain
-	f.execStart = ""
 	f.workingDir = "/var/www/" + f.domain
 	f.environmentFile = ""
 	f.sysUser = defaults.User()
@@ -199,7 +197,6 @@ func (f *ConfigForm) applySaved(saved *entities.DomainConfig) {
 	service := saved.Systemd()
 	f.systemdEnabled = service.Enabled()
 	f.description = service.Description()
-	f.execStart = service.ExecStart()
 	f.workingDir = service.WorkingDirectory()
 	f.environmentFile = service.EnvironmentFile()
 	f.sysUser = service.User()
@@ -261,7 +258,7 @@ func (f *ConfigForm) rebuildRows() {
 			id: "entrypoint", label: "Entry point", kind: rowText,
 			value: func() string { return f.entryPoint },
 			set:   func(v string) { f.entryPoint = v },
-			help:  "reverse proxy backend as host:port, e.g. 127.0.0.1:4001",
+			help:  "backend binary, relative to " + f.domainRoot() + " (e.g. bin/server) or absolute",
 		})
 	}
 	if entry.SupportsBehindProxy {
@@ -290,28 +287,31 @@ func (f *ConfigForm) rebuildRows() {
 		})
 	}
 
-	rows = append(rows, formRow{
-		id: "systemd", label: "Enable systemd unit", kind: rowToggle,
-		value:   func() string { return boolLabel(f.systemdEnabled) },
-		checked: func() bool { return f.systemdEnabled },
-		cycle: func(int) {
-			f.systemdEnabled = !f.systemdEnabled
-			f.rebuildRows()
-		},
-	})
+	// The backend systemd unit only exists to run the reverse proxy entry point binary,
+	// so it is offered exactly for the models that require an entry point.
+	if entry.RequiresEntryPoint {
+		rows = append(rows, formRow{
+			id: "systemd", label: "Enable systemd unit", kind: rowToggle,
+			value:   func() string { return boolLabel(f.systemdEnabled) },
+			checked: func() bool { return f.systemdEnabled },
+			cycle: func(int) {
+				f.systemdEnabled = !f.systemdEnabled
+				f.rebuildRows()
+			},
+		})
 
-	if f.systemdEnabled {
-		rows = append(rows,
-			textRow("description", "Description", func() string { return f.description }, func(v string) { f.description = v }, "e.g. 4001 - myapp"),
-			textRow("execstart", "ExecStart", func() string { return f.execStart }, func(v string) { f.execStart = v }, "absolute path to the backend binary"),
-			textRow("workingdir", "WorkingDirectory", func() string { return f.workingDir }, func(v string) { f.workingDir = v }, "e.g. /opt/myapp"),
-			textRow("envfile", "EnvironmentFile", func() string { return f.environmentFile }, func(v string) { f.environmentFile = v }, "e.g. /etc/myapp.env"),
-			textRow("user", "User", func() string { return f.sysUser }, func(v string) { f.sysUser = v }, "e.g. www-data"),
-			textRow("group", "Group", func() string { return f.sysGroup }, func(v string) { f.sysGroup = v }, "e.g. www-data"),
-			textRow("restart", "Restart", func() string { return f.restart }, func(v string) { f.restart = v }, "always / on-failure / no"),
-			textRow("restartsec", "RestartSec", func() string { return f.restartSec }, func(v string) { f.restartSec = v }, "seconds between restarts"),
-			textRow("memorymax", "MemoryMax", func() string { return f.memoryMax }, func(v string) { f.memoryMax = v }, "e.g. 512M"),
-		)
+		if f.systemdEnabled {
+			rows = append(rows,
+				textRow("description", "Description", func() string { return f.description }, func(v string) { f.description = v }, "e.g. 4001 - myapp"),
+				textRow("workingdir", "WorkingDirectory", func() string { return f.workingDir }, func(v string) { f.workingDir = v }, "e.g. /opt/myapp"),
+				textRow("envfile", "EnvironmentFile", func() string { return f.environmentFile }, func(v string) { f.environmentFile = v }, "e.g. /etc/myapp.env"),
+				textRow("user", "User", func() string { return f.sysUser }, func(v string) { f.sysUser = v }, "e.g. www-data"),
+				textRow("group", "Group", func() string { return f.sysGroup }, func(v string) { f.sysGroup = v }, "e.g. www-data"),
+				textRow("restart", "Restart", func() string { return f.restart }, func(v string) { f.restart = v }, "always / on-failure / no"),
+				textRow("restartsec", "RestartSec", func() string { return f.restartSec }, func(v string) { f.restartSec = v }, "seconds between restarts"),
+				textRow("memorymax", "MemoryMax", func() string { return f.memoryMax }, func(v string) { f.memoryMax = v }, "e.g. 512M"),
+			)
+		}
 	}
 
 	f.rows = rows
@@ -509,9 +509,8 @@ func (f *ConfigForm) buildConfig() (*entities.DomainConfig, error) {
 	}
 
 	service, err := entities.NewSystemdService(
-		f.systemdEnabled,
+		f.systemdEnabled && f.currentModel().RequiresEntryPoint,
 		f.description,
-		f.execStart,
 		f.workingDir,
 		f.environmentFile,
 		f.sysUser,
@@ -553,8 +552,12 @@ func (f *ConfigForm) renderForm() string {
 	b.WriteString(styles.HeaderSubtitle.Render(fmt.Sprintf("Web server: %s", f.kind)) + "\n")
 	if f.currentModel().RequiresEntryPoint {
 		b.WriteString(styles.HeaderSubtitle.Render(fmt.Sprintf(
-			"Operation port: %s  (auto-assigned, written to .env as PORT)", f.operationPortLabel(),
+			"Reverse proxy → http://127.0.0.1:%s  (auto-assigned port, written to .env as PORT)", f.operationPortLabel(),
 		)) + "\n")
+		if f.systemdEnabled {
+			b.WriteString(styles.HeaderSubtitle.Render(
+				"ExecStart: "+f.derivedExecStartLabel()+"  (built from the entry point)") + "\n")
+		}
 	}
 	b.WriteString("\n")
 
@@ -641,6 +644,18 @@ func (f *ConfigForm) operationPortLabel() string {
 		return strconv.Itoa(f.operationPort)
 	}
 	return "allocating..."
+}
+
+// domainRoot returns the virtual root directory of the domain (/var/www/<domain>).
+func (f *ConfigForm) domainRoot() string { return "/var/www/" + f.domain }
+
+// derivedExecStartLabel shows the ExecStart Atlas builds from the entry point binary.
+func (f *ConfigForm) derivedExecStartLabel() string {
+	execStart := entities.ResolveExecStart(f.domain, f.entryPoint)
+	if execStart == "" {
+		return "(set the entry point)"
+	}
+	return execStart
 }
 
 func renderSelectValue(row formRow, active bool) string {

@@ -7,17 +7,16 @@ import (
 
 var (
 	ErrSystemdMissingDescription = errors.New("systemd service requires a description")
-	ErrSystemdMissingExecStart   = errors.New("systemd service requires an ExecStart command")
 	ErrSystemdInvalidRestartSec  = errors.New("systemd RestartSec cannot be negative")
 )
 
 // SystemdService is the backend service unit generated for a domain. It mirrors the
-// essential directives of a systemd .service file (ExecStart, WorkingDirectory,
-// EnvironmentFile, User/Group, Restart, MemoryMax...).
+// essential directives of a systemd .service file (WorkingDirectory, EnvironmentFile,
+// User/Group, Restart, MemoryMax...). The ExecStart command is not stored here: Atlas
+// derives it from the DomainConfig entry point binary.
 type SystemdService struct {
 	enabled         bool
 	description     string
-	execStart       string
 	workingDir      string
 	environmentFile string
 	user            string
@@ -27,11 +26,11 @@ type SystemdService struct {
 	memoryMax       string
 }
 
-// NewSystemdService creates a validated SystemdService. When enabled, a description and
-// an ExecStart command are mandatory so a renderable unit is always produced.
+// NewSystemdService creates a validated SystemdService. When enabled, a description is
+// mandatory so a renderable unit is always produced.
 func NewSystemdService(
 	enabled bool,
-	description, execStart, workingDir, environmentFile, user, group, restart string,
+	description, workingDir, environmentFile, user, group, restart string,
 	restartSec int,
 	memoryMax string,
 ) (*SystemdService, error) {
@@ -42,7 +41,6 @@ func NewSystemdService(
 	service := &SystemdService{
 		enabled:         enabled,
 		description:     strings.TrimSpace(description),
-		execStart:       strings.TrimSpace(execStart),
 		workingDir:      strings.TrimSpace(workingDir),
 		environmentFile: strings.TrimSpace(environmentFile),
 		user:            strings.TrimSpace(user),
@@ -55,9 +53,6 @@ func NewSystemdService(
 	if enabled {
 		if service.description == "" {
 			return nil, ErrSystemdMissingDescription
-		}
-		if service.execStart == "" {
-			return nil, ErrSystemdMissingExecStart
 		}
 	}
 
@@ -82,7 +77,6 @@ func DefaultSystemdService() SystemdService {
 
 func (s SystemdService) Enabled() bool            { return s.enabled }
 func (s SystemdService) Description() string      { return s.description }
-func (s SystemdService) ExecStart() string        { return s.execStart }
 func (s SystemdService) WorkingDirectory() string { return s.workingDir }
 func (s SystemdService) EnvironmentFile() string  { return s.environmentFile }
 func (s SystemdService) User() string             { return s.user }

@@ -24,7 +24,7 @@ type vhostTemplateData struct {
 	ServerName  string
 	RootPath    string
 	DomainRoot  string
-	EntryPoint  string
+	ProxyTarget string
 	MaxBodySize string
 	PHPVersion  string
 	ServePublic bool
@@ -55,7 +55,7 @@ func (r *vhostRenderer) Render(config *entities.DomainConfig) (string, error) {
 		ServerName:           config.Domain(),
 		RootPath:             config.PublicRoot(),
 		DomainRoot:           config.DomainRoot(),
-		EntryPoint:           config.EntryPoint(),
+		ProxyTarget:          config.ProxyTarget(),
 		MaxBodySize:          config.MaxBodySizeForServer(),
 		PHPVersion:           config.PHPVersion(),
 		ServePublic:          config.ServePublicDir(),

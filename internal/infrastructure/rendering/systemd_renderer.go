@@ -46,7 +46,7 @@ func (r *systemdRenderer) Render(config *entities.DomainConfig) (string, error) 
 	service := config.Systemd()
 	data := systemdTemplateData{
 		Description:      service.Description(),
-		ExecStart:        service.ExecStart(),
+		ExecStart:        config.ResolvedExecStart(),
 		WorkingDirectory: service.WorkingDirectory(),
 		EnvironmentFile:  service.EnvironmentFile(),
 		User:             service.User(),

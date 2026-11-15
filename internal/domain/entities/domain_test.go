@@ -74,7 +74,7 @@ func TestNewDomainConfigRejectsUnsafeDomain(t *testing.T) {
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		10*1024*1024,
-		"127.0.0.1:4001",
+		"bin/server",
 		4000,
 		false,
 		false,

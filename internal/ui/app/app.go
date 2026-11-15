@@ -435,7 +435,7 @@ func (m *RootModel) renderConfigSummary() string {
 	b.WriteString(fmt.Sprintf("  %s %s → %s\n",
 		styles.BadgeActive.Render("✔"),
 		config.VHostModel(),
-		entryPointLabel(config),
+		proxyTargetLabel(config),
 	))
 	b.WriteString(fmt.Sprintf("  %s max body %s • systemd %s\n",
 		styles.HeaderSubtitle.Render("◦"),
@@ -446,11 +446,11 @@ func (m *RootModel) renderConfigSummary() string {
 	return b.String()
 }
 
-func entryPointLabel(config *entities.DomainConfig) string {
-	if config.EntryPoint() == "" {
-		return "local (no proxy)"
+func proxyTargetLabel(config *entities.DomainConfig) string {
+	if target := config.ProxyTarget(); target != "" {
+		return target
 	}
-	return config.EntryPoint()
+	return "local (no proxy)"
 }
 
 func systemdLabel(config *entities.DomainConfig) string {

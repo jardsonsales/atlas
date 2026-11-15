@@ -3,7 +3,6 @@ package entities
 import (
 	"errors"
 	"fmt"
-	"net"
 	"path"
 	"strconv"
 	"strings"
@@ -14,7 +13,7 @@ var (
 	ErrInvalidDomainConfigWebServer  = errors.New("domain configuration requires nginx or apache")
 	ErrInvalidDomainConfigModel      = errors.New("unknown or incompatible vhost model for the selected web server and connection type")
 	ErrInvalidDomainConfigMaxBody    = errors.New("max body size must be greater than zero")
-	ErrInvalidDomainConfigEntryPoint = errors.New("reverse proxy requires a valid entry point (host:port)")
+	ErrInvalidDomainConfigEntryPoint = errors.New("reverse proxy requires a backend binary (entry point)")
 	ErrInvalidDomainConfigPort       = errors.New("operation port must be between 1 and 65535")
 	ErrInvalidDomainConfigPHPVersion = errors.New("the socket model requires a PHP version")
 	ErrInvalidDomainConfigPublicDir  = errors.New("this vhost model does not support serving a public directory")
@@ -50,7 +49,8 @@ const (
 )
 
 // DomainConfig is the per-domain provisioning configuration: connection type, vhost model,
-// max body size, reverse proxy entry point, operation port and the backend systemd service.
+// max body size, reverse proxy entry point (the backend binary), operation port and the
+// backend systemd service.
 type DomainConfig struct {
 	domain         string
 	webServerKind  WebServerKind
@@ -67,6 +67,10 @@ type DomainConfig struct {
 
 // NewDomainConfig creates a validated DomainConfig, enforcing that the vhost model matches
 // the web server and connection type and that every required input is present.
+//
+// The entry point is the backend binary of a reverse proxy model (relative to the domain
+// root, or an absolute path). Atlas derives the systemd ExecStart from it and always points
+// the reverse proxy at the loopback operation port (127.0.0.1:<port>).
 //
 // The operation port is only meaningful for reverse proxy models (the backend port written
 // to the domain .env as PORT); it may be 0 while still unassigned and is cleared otherwise.
@@ -111,7 +115,7 @@ func NewDomainConfig(
 
 	entryPoint = strings.TrimSpace(entryPoint)
 	if entry.RequiresEntryPoint {
-		if !isValidEntryPoint(entryPoint) {
+		if !isValidEntryPointBinary(entryPoint) {
 			return nil, ErrInvalidDomainConfigEntryPoint
 		}
 		if operationPort < 0 || operationPort > OperationPortMax {
@@ -176,10 +180,27 @@ func (c *DomainConfig) MaxBodySizeForServer() string {
 	return c.MaxBodySizeNginx()
 }
 
-// RequiresEntryPoint reports whether the selected model needs a reverse proxy backend.
+// RequiresEntryPoint reports whether the selected model runs a backend binary behind a
+// reverse proxy (and therefore owns an entry point and an operation port).
 func (c *DomainConfig) RequiresEntryPoint() bool {
 	entry, ok := FindModel(c.webServerKind, c.vhostModel)
 	return ok && entry.RequiresEntryPoint
+}
+
+// ProxyTarget is the upstream the web server reverse-proxies to. It is always the loopback
+// operation port (127.0.0.1:<port>), never a host typed by the user; it is empty when the
+// model has no reverse proxy backend or the port is still unassigned.
+func (c *DomainConfig) ProxyTarget() string {
+	if !c.RequiresEntryPoint() || c.operationPort <= 0 {
+		return ""
+	}
+	return "127.0.0.1:" + strconv.Itoa(c.operationPort)
+}
+
+// ResolvedExecStart returns the systemd ExecStart command for the backend binary: the entry
+// point resolved against the domain root (/var/www/<domain>) when relative.
+func (c *DomainConfig) ResolvedExecStart() string {
+	return ResolveExecStart(c.domain, c.entryPoint)
 }
 
 // UsesOperationPort reports whether the configuration owns a backend operation port.
@@ -259,18 +280,29 @@ func UnitNameFor(domain string) string { return domain + ".service" }
 // SuggestedUnitName returns the conventional systemd unit name for the domain.
 func (c *DomainConfig) SuggestedUnitName() string { return UnitNameFor(c.domain) }
 
-// isValidEntryPoint validates a reverse proxy target in "host:port" form.
-func isValidEntryPoint(value string) bool {
-	host, port, err := net.SplitHostPort(value)
-	if err != nil {
+// ResolveExecStart builds the systemd ExecStart command for a backend binary. A relative
+// binary is resolved against the domain root (/var/www/<domain>); an absolute one is kept.
+func ResolveExecStart(domain, binary string) string {
+	binary = strings.TrimSpace(binary)
+	if binary == "" {
+		return ""
+	}
+	if path.IsAbs(binary) {
+		return binary
+	}
+	return path.Join("/var/www", domain, binary)
+}
+
+// isValidEntryPointBinary validates the backend binary of a reverse proxy model: a
+// non-empty, whitespace-free command path without path traversal segments.
+func isValidEntryPointBinary(value string) bool {
+	if value == "" || strings.ContainsAny(value, " \t\n\r") {
 		return false
 	}
-	if strings.TrimSpace(host) == "" {
-		return false
-	}
-	number, err := strconv.Atoi(port)
-	if err != nil || number <= 0 || number > 65535 {
-		return false
+	for _, segment := range strings.Split(value, "/") {
+		if segment == ".." {
+			return false
+		}
 	}
 	return true
 }

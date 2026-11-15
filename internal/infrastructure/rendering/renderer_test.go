@@ -12,7 +12,7 @@ const tenMegabytes = 10 * 1024 * 1024
 
 func disabledSystemd(t *testing.T) entities.SystemdService {
 	t.Helper()
-	service, err := entities.NewSystemdService(false, "", "", "", "", "", "", "always", 5, "")
+	service, err := entities.NewSystemdService(false, "", "", "", "", "", "always", 5, "")
 	if err != nil {
 		t.Fatalf("failed to build systemd fixture: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestVHostRendererNginxReverseProxy(t *testing.T) {
 		entities.WebServerNginx,
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
-		"127.0.0.1:4001",
+		"bin/server",
 		"",
 		disabledSystemd(t),
 	)
@@ -70,7 +70,7 @@ func TestVHostRendererNginxWebSocketMapAndForwardedHeaders(t *testing.T) {
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		tenMegabytes,
-		"127.0.0.1:4001",
+		"bin/server",
 		4000,
 		false,
 		false,
@@ -100,7 +100,7 @@ func TestVHostRendererNginxWebSocketMapAndForwardedHeaders(t *testing.T) {
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
 		tenMegabytes,
-		"127.0.0.1:4001",
+		"bin/server",
 		4000,
 		true,
 		false,
@@ -146,7 +146,7 @@ func TestVHostRendererApacheReverseProxy(t *testing.T) {
 		entities.WebServerApache,
 		entities.ConnectionReverseProxy,
 		entities.ModelApacheReverseProxy,
-		"127.0.0.1:4001",
+		"bin/server",
 		"",
 		disabledSystemd(t),
 	)
@@ -187,7 +187,6 @@ func TestSystemdRenderer(t *testing.T) {
 	service, err := entities.NewSystemdService(
 		true,
 		"4001 - nexus",
-		"/usr/local/bin/nexus",
 		"/opt/nexus",
 		"/etc/nexus.env",
 		"www-data",
@@ -206,7 +205,7 @@ func TestSystemdRenderer(t *testing.T) {
 		entities.WebServerNginx,
 		entities.ConnectionReverseProxy,
 		entities.ModelNginxReverseProxy,
-		"127.0.0.1:4001",
+		"/usr/local/bin/nexus",
 		"",
 		*service,
 	)

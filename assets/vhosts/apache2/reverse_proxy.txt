@@ -9,8 +9,8 @@
     LimitRequestBody {{ .MaxBodySize }}
 
     ProxyPreserveHost On
-    ProxyPass / http://{{ .EntryPoint }}/
-    ProxyPassReverse / http://{{ .EntryPoint }}/
+    ProxyPass / http://{{ .ProxyTarget }}/
+    ProxyPassReverse / http://{{ .ProxyTarget }}/
 
     # Security headers
     Header always set X-Content-Type-Options "nosniff"
@@ -21,7 +21,7 @@
     RewriteEngine On
     RewriteCond %{HTTP:Upgrade} =websocket [NC]
     RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/?(.*) "ws://{{ .EntryPoint }}/$1" [P,L]
+    RewriteRule ^/?(.*) "ws://{{ .ProxyTarget }}/$1" [P,L]
 
     ErrorLog ${APACHE_LOG_DIR}/error.log
     CustomLog ${APACHE_LOG_DIR}/access.log combined

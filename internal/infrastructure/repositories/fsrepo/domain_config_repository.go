@@ -44,7 +44,6 @@ type domainConfigDTO struct {
 type systemdUnitDTO struct {
 	Enabled          bool   `json:"enabled"`
 	Description      string `json:"description"`
-	ExecStart        string `json:"execStart"`
 	WorkingDirectory string `json:"workingDirectory"`
 	EnvironmentFile  string `json:"environmentFile"`
 	User             string `json:"user"`
@@ -188,7 +187,6 @@ func (d domainConfigDTO) toEntity() (*entities.DomainConfig, error) {
 	systemd, err := entities.NewSystemdService(
 		d.Systemd.Enabled,
 		d.Systemd.Description,
-		d.Systemd.ExecStart,
 		d.Systemd.WorkingDirectory,
 		d.Systemd.EnvironmentFile,
 		d.Systemd.User,
@@ -232,7 +230,6 @@ func toDomainConfigDTO(config *entities.DomainConfig) domainConfigDTO {
 		Systemd: systemdUnitDTO{
 			Enabled:          service.Enabled(),
 			Description:      service.Description(),
-			ExecStart:        service.ExecStart(),
 			WorkingDirectory: service.WorkingDirectory(),
 			EnvironmentFile:  service.EnvironmentFile(),
 			User:             service.User(),

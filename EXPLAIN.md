@@ -13,7 +13,7 @@ provision it:
 ```
 /var/www/<domain>/            # folder name == domain name (hostname-safe)
 ├── .env.example              # committed template of the runtime config  (you provide)
-├── .env                      # real runtime config, incl. PORT            (not committed)
+├── .env                      # real runtime config, incl. PORT            (human writes it)
 ├── .atlas.json               # optional metadata (description/environment/status)
 └── public/                   # document root for static / PHP apps
 ```
@@ -34,6 +34,11 @@ your code or your command line. Concretely:
   comment is preserved.
 - **Your app must read `PORT` from its environment / `.env` and bind to it.** Never hardcode
   the port: the operator and Atlas rely on this contract to keep apps collision-free.
+- **The real `.env` is created by a human (DevOps), never by an automated script.** Atlas only
+  writes/updates the `PORT` key; everything else is authored by the operator on the server, by
+  hand or from a secret store. The application agent and the deploy pipeline must **never**
+  generate, overwrite or commit the real `.env` — an auto-written file would hide required
+  configuration and leak secrets.
 
 Because `.env` holds real configuration (and often secrets), commit an **`.env.example`** that
 documents every variable instead, and keep `.env` out of version control:
@@ -63,15 +68,61 @@ Internet → nginx/Apache (80/443) → http://127.0.0.1:<PORT> → your binary
 - Therefore the app must be a **long-running HTTP server** listening on **loopback**
   (`127.0.0.1:<PORT>`, never `0.0.0.0` — the web server is the only public listener).
 - Point the systemd `EnvironmentFile` at the app's `.env` so `PORT` (and the rest) reach the
-  process. `ExecStart` must be an **absolute path** to the runnable command (no shell).
+  process. The binary may be shipped **relative to the domain root** (e.g. `bin/<app>`) or as an
+  **absolute path** (e.g. `/var/www/<domain>/bin/<app>`); Atlas turns it into an absolute
+  `ExecStart` (no shell).
 - Atlas also forwards `Host`, `X-Real-IP`, `X-Forwarded-Proto` and `X-Forwarded-For`, and
   supports WebSocket upgrades, so a standard HTTP server works without extra config.
 
-## 4. Deploy: restart the service with Atlas
+## 4. Deploy workflow
+
+### 4.1 Minimal deploy
+
+The smallest deploy that is useful ships exactly two things:
+
+- the **EntryPoint** — for reverse-proxy apps, the runnable command that becomes the systemd
+  `ExecStart` (a path relative to the domain root, e.g. `bin/<app>`, or an absolute one);
+- the **`.env.example`** — the committed template documenting every variable, including `PORT`.
+
+Everything else (vhost, TLS, systemd unit and the real `.env`) is created by Atlas and the
+operator, not by your deploy.
+
+### 4.2 The real `.env` is authored by a human
+
+Atlas only writes/updates the `PORT` key. The **real `.env` is created by a human (DevOps)** on
+the server. Neither the application agent nor the deploy pipeline may generate or overwrite it
+automatically: it carries secrets and the configuration the operator is expected to review. Ship
+`.env.example`; let a person produce the real `.env`.
+
+### 4.3 Detect the first deploy (no `.env`)
+
+A workflow must behave differently the first time, because the app is not configured yet. Detect
+the first deploy by checking for `/var/www/<domain>/.env` — **absent means first deploy**:
+
+- **First deploy (`/.env` missing):** ship **only the primary/essential artifacts** — the
+  EntryPoint and `.env.example` — so the operator can provision the domain in Atlas, fill in the
+  real `.env` and configure everything. Do **not** run migrations, seeders, cache warmups or
+  anything that needs real configuration.
+- **Subsequent deploys (`.env` exists):** the app is configured, so run the **full** workflow —
+  dependencies, build, **migrations**, asset compilation, etc. — and finish with the restart
+  below.
+
+```sh
+if [ -f "/var/www/<domain>/.env" ]; then
+  # Configured: run the full workflow.
+  # ... install deps, build, migrate, compile assets ...
+  atlas --restart <domain>
+else
+  # First deploy: ship EntryPoint + .env.example only, then stop and wait for the operator.
+  :
+fi
+```
+
+### 4.4 Restart the service with Atlas
 
 Shipping a new build is not enough: because the app runs as a systemd unit, the running process
 keeps serving the **old** binary until it is restarted. Do **not** call `systemctl` yourself —
-Atlas owns the unit, so after every deploy add a final step that restarts it:
+Atlas owns the unit, so every (re-)deploy ends with:
 
 ```sh
 atlas --restart <domain>
@@ -84,8 +135,8 @@ atlas --restart <domain>
 - On a machine where the domain was never provisioned (no unit yet), the restart fails — only
   call it for a domain that has an enabled backend (reverse-proxy apps).
 
-Two phases, then: **provision once** (in the Atlas TUI) and **`atlas --restart <domain>` on
-every subsequent deploy**.
+So: **provision once** (in the Atlas TUI, then a human writes `.env`) and on every later deploy
+run the full workflow ending in **`atlas --restart <domain>`**.
 
 ## 5. Static / PHP apps
 
@@ -107,6 +158,10 @@ per-domain max body size. Your app only needs to run, read `PORT`, and be restar
 
 - [ ] The app lives at `/var/www/<domain>` with a hostname-safe name.
 - [ ] A committed `.env.example` documents every variable, including `PORT`.
+- [ ] The minimal deploy ships the **EntryPoint** (reverse-proxy apps) and `.env.example`.
+- [ ] The real `.env` is created by a **human (DevOps)**; neither the agent nor a script writes it.
+- [ ] The workflow **detects the first deploy** (no `.env`) and then ships only the essential
+      artifacts, deferring migrations and the rest to later deploys.
 - [ ] `.env` is **not** committed; secrets stay out of the repository.
 - [ ] Reverse-proxy apps read `PORT` and bind **loopback**; no hardcoded port.
 - [ ] The app starts from an **absolute** command (the systemd `ExecStart`).
