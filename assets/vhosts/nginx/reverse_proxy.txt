@@ -1,0 +1,33 @@
+# Per-domain map so several enabled domains never collide on the same map name.
+map $http_upgrade ${{ .ConnectionUpgradeVar }} {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+
+    server_name {{ .ServerName }};
+
+    # Maximum request body size - configurable via Atlas
+    client_max_body_size {{ .MaxBodySize }};
+
+    # Security headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        proxy_pass http://{{ .EntryPoint }};
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # X-Forwarded-For honors the "Behind a proxy" domain setting
+        proxy_set_header X-Forwarded-For {{ if .BehindProxy }}$proxy_add_x_forwarded_for{{ else }}$remote_addr{{ end }};
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection ${{ .ConnectionUpgradeVar }};
+    }
+}

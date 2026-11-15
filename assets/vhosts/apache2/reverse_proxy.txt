@@ -1,0 +1,28 @@
+# Apache vhost model: reverse proxy
+# Required modules: mpm_*, proxy, proxy_http, headers, rewrite, proxy_wstunnel
+
+<VirtualHost *:80>
+    ServerAdmin admin@example.com
+    ServerName {{ .ServerName }}
+
+    # Maximum request body size in bytes - configurable via Atlas
+    LimitRequestBody {{ .MaxBodySize }}
+
+    ProxyPreserveHost On
+    ProxyPass / http://{{ .EntryPoint }}/
+    ProxyPassReverse / http://{{ .EntryPoint }}/
+
+    # Security headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # WebSocket upgrade support
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/?(.*) "ws://{{ .EntryPoint }}/$1" [P,L]
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>

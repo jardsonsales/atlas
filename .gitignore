@@ -1,0 +1,15 @@
+# Build artifacts
+/bin/
+/atlas
+
+# Development sandbox filesystem (auto-seeded and disposable)
+/dev/
+
+# Local editor / tooling state
+/.trae/
+/.screenshots/
+
+# OS and editor noise
+.DS_Store
+*.swp
+*~

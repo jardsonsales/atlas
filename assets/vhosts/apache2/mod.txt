@@ -1,0 +1,28 @@
+# Apache vhost model: standard (mod_php / static)
+# Required modules: mpm_*, dir, authz_core, headers
+
+<VirtualHost *:80>
+    ServerAdmin admin@example.com
+    ServerName {{ .ServerName }}
+
+    DocumentRoot {{ .RootPath }}
+
+    <Directory {{ .RootPath }}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+
+        # Maximum request body size in bytes - configurable via Atlas
+        LimitRequestBody {{ .MaxBodySize }}
+    </Directory>
+
+    DirectoryIndex index.php index.html index.htm
+
+    # Security headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>

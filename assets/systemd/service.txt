@@ -1,0 +1,27 @@
+[Unit]
+Description={{ .Description }}
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{ .ExecStart }}
+{{- if .WorkingDirectory }}
+WorkingDirectory={{ .WorkingDirectory }}
+{{- end }}
+{{- if .EnvironmentFile }}
+EnvironmentFile={{ .EnvironmentFile }}
+{{- end }}
+Restart={{ .Restart }}
+RestartSec={{ .RestartSec }}
+{{- if .MemoryMax }}
+MemoryMax={{ .MemoryMax }}
+{{- end }}
+{{- if .User }}
+User={{ .User }}
+{{- end }}
+{{- if .Group }}
+Group={{ .Group }}
+{{- end }}
+
+[Install]
+WantedBy=multi-user.target
