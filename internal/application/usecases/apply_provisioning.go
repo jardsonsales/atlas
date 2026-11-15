@@ -8,20 +8,24 @@ import (
 )
 
 type applyProvisioningUseCase struct {
-	renderUC contracts.RenderProvisioningUseCase
-	applier  contracts.ProvisioningApplier
+	renderUC      contracts.RenderProvisioningUseCase
+	applier       contracts.ProvisioningApplier
+	getSettingsUC contracts.GetSettingsUseCase
 }
 
 // NewApplyProvisioningUseCase creates a contract-oriented implementation of
 // ApplyProvisioningUseCase. It renders the provisioning plan (vhost + systemd) with the same
-// renderer used by the preview and then hands it to the ProvisioningApplier.
+// renderer used by the preview, loads the global settings (certbot contact e-mail) and then
+// hands both to the ProvisioningApplier.
 func NewApplyProvisioningUseCase(
 	renderUC contracts.RenderProvisioningUseCase,
 	applier contracts.ProvisioningApplier,
+	getSettingsUC contracts.GetSettingsUseCase,
 ) contracts.ApplyProvisioningUseCase {
 	return &applyProvisioningUseCase{
-		renderUC: renderUC,
-		applier:  applier,
+		renderUC:      renderUC,
+		applier:       applier,
+		getSettingsUC: getSettingsUC,
 	}
 }
 
@@ -34,5 +38,10 @@ func (uc *applyProvisioningUseCase) Execute(
 		return nil, err
 	}
 
-	return uc.applier.Apply(ctx, preview, config)
+	settings, err := uc.getSettingsUC.Execute(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.applier.Apply(ctx, preview, config, settings)
 }

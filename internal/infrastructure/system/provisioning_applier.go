@@ -15,8 +15,6 @@ import (
 const (
 	// virtualSystemdUnitDir is the virtual path where backend unit files are installed.
 	virtualSystemdUnitDir = "/etc/systemd/system"
-	// certbotEmailEnv optionally holds the contact e-mail used to register with Let's Encrypt.
-	certbotEmailEnv = "ATLAS_CERTBOT_EMAIL"
 
 	vhostLinkTarget = ".."
 	configDirPerm   = 0o755
@@ -62,6 +60,7 @@ func (a *fsProvisioningApplier) Apply(
 	ctx context.Context,
 	preview *entities.ProvisioningPreview,
 	config *entities.DomainConfig,
+	settings *entities.Settings,
 ) (*entities.ProvisioningResult, error) {
 	steps := make([]entities.ProvisioningStep, 0, 6)
 
@@ -76,7 +75,7 @@ func (a *fsProvisioningApplier) Apply(
 		// Without a working vhost the ACME challenge cannot be served; skip HTTPS.
 		steps = append(steps, skippedStep("HTTPS certificate", "skipped: the vhost was not applied"))
 	} else {
-		httpsSteps, err := a.applyHTTPS(ctx, config)
+		httpsSteps, err := a.applyHTTPS(ctx, config, settings)
 		steps = append(steps, httpsSteps...)
 		httpsErr = err
 	}
@@ -212,11 +211,12 @@ func (a *fsProvisioningApplier) applySystemd(
 }
 
 // applyHTTPS issues the TLS certificate with certbot using the plugin of the detected server.
-// The contact e-mail is taken from ATLAS_CERTBOT_EMAIL; without it registration proceeds
+// The contact e-mail comes from the Atlas settings; without one, registration proceeds
 // without an e-mail (--register-unsafely-without-email).
 func (a *fsProvisioningApplier) applyHTTPS(
 	ctx context.Context,
 	config *entities.DomainConfig,
+	settings *entities.Settings,
 ) ([]entities.ProvisioningStep, error) {
 	if !a.runCommands {
 		return []entities.ProvisioningStep{skippedStep("HTTPS certificate", "sandbox mode: command not executed")}, nil
@@ -233,8 +233,8 @@ func (a *fsProvisioningApplier) applyHTTPS(
 	}
 
 	args := []string{plugin, "-d", config.Domain(), "--non-interactive", "--agree-tos", "--redirect"}
-	if email := strings.TrimSpace(os.Getenv(certbotEmailEnv)); email != "" {
-		args = append(args, "-m", email)
+	if settings != nil && settings.HasCertbotEmail() {
+		args = append(args, "-m", settings.CertbotEmail())
 	} else {
 		args = append(args, "--register-unsafely-without-email")
 	}

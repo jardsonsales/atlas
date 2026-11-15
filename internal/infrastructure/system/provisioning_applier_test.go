@@ -73,7 +73,6 @@ func applierFixture(t *testing.T, systemd entities.SystemdService) (*fsProvision
 
 func TestProvisioningApplierAppliesVHostHTTPSAndSystemd(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv(certbotEmailEnv, "")
 
 	systemd, err := entities.NewSystemdService(
 		true, "4001 - nexus", "/usr/local/bin/nexus", "/opt/nexus",
@@ -86,7 +85,7 @@ func TestProvisioningApplierAppliesVHostHTTPSAndSystemd(t *testing.T) {
 	applier, config, preview, root := applierFixture(t, *systemd)
 	runner := applier.runner.(*fakeRunner)
 
-	result, err := applier.Apply(ctx, preview, config)
+	result, err := applier.Apply(ctx, preview, config, entities.DefaultSettings())
 	if err != nil {
 		t.Fatalf("unexpected apply error: %v", err)
 	}
@@ -129,14 +128,18 @@ func TestProvisioningApplierAppliesVHostHTTPSAndSystemd(t *testing.T) {
 	assertCalls(t, runner.calls, wantCalls)
 }
 
-func TestProvisioningApplierUsesCertbotEmailFromEnv(t *testing.T) {
+func TestProvisioningApplierUsesCertbotEmailFromSettings(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv(certbotEmailEnv, "ops@example.com")
+
+	settings, err := entities.NewSettings("ops@example.com")
+	if err != nil {
+		t.Fatalf("failed to build settings fixture: %v", err)
+	}
 
 	applier, config, preview, _ := applierFixture(t, entities.DefaultSystemdService())
 	runner := applier.runner.(*fakeRunner)
 
-	if _, err := applier.Apply(ctx, preview, config); err != nil {
+	if _, err := applier.Apply(ctx, preview, config, settings); err != nil {
 		t.Fatalf("unexpected apply error: %v", err)
 	}
 
@@ -148,7 +151,7 @@ func TestProvisioningApplierUsesCertbotEmailFromEnv(t *testing.T) {
 	}
 	joined := strings.Join(certbot.args, " ")
 	if !strings.Contains(joined, "-m ops@example.com") {
-		t.Errorf("expected the certbot e-mail to come from the env, got %q", joined)
+		t.Errorf("expected the certbot e-mail to come from the settings, got %q", joined)
 	}
 	if strings.Contains(joined, "--register-unsafely-without-email") {
 		t.Errorf("did not expect the without-email fallback, got %q", joined)
@@ -157,7 +160,6 @@ func TestProvisioningApplierUsesCertbotEmailFromEnv(t *testing.T) {
 
 func TestProvisioningApplierRollsBackOnFailedConfigTest(t *testing.T) {
 	ctx := context.Background()
-	t.Setenv(certbotEmailEnv, "")
 
 	applier, config, preview, root := applierFixture(t, entities.DefaultSystemdService())
 	runner := &fakeRunner{
@@ -166,7 +168,7 @@ func TestProvisioningApplierRollsBackOnFailedConfigTest(t *testing.T) {
 	}
 	applier.runner = runner
 
-	result, err := applier.Apply(ctx, preview, config)
+	result, err := applier.Apply(ctx, preview, config, entities.DefaultSettings())
 	if err == nil {
 		t.Fatal("expected the failed config test to surface an error")
 	}
@@ -221,7 +223,7 @@ func TestProvisioningApplierSandboxSkipsCommands(t *testing.T) {
 		"server {}\n", "", config.SuggestedVHostPath(), config.SuggestedUnitName(),
 	)
 
-	result, err := applier.Apply(ctx, preview, config)
+	result, err := applier.Apply(ctx, preview, config, entities.DefaultSettings())
 	if err != nil {
 		t.Fatalf("unexpected apply error: %v", err)
 	}

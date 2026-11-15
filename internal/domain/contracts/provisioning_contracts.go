@@ -27,13 +27,15 @@ type AuditDomainUseCase interface {
 
 // ProvisioningApplier applies a rendered provisioning plan to the host: it writes and links
 // the vhost, validates and reloads the web server, writes and enables the backend systemd unit
-// and issues the TLS certificate. Every filesystem path is resolved through the PathResolver
-// sandbox and every external command runs without a shell.
+// and issues the TLS certificate (using the certbot contact e-mail from the settings). Every
+// filesystem path is resolved through the PathResolver sandbox and every external command runs
+// without a shell.
 type ProvisioningApplier interface {
 	Apply(
 		ctx context.Context,
 		preview *entities.ProvisioningPreview,
 		config *entities.DomainConfig,
+		settings *entities.Settings,
 	) (*entities.ProvisioningResult, error)
 }
 

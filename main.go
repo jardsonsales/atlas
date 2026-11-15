@@ -35,7 +35,9 @@ func main() {
 	domainRepo := fsrepo.NewFSDomainRepository(pathResolver)
 	domainInspector := fsrepo.NewFSDomainInspector(pathResolver)
 	webServerProbe := system.NewWebServerProbe(pathResolver)
-	configRepo := fsrepo.NewDomainConfigRepository(resolveConfigDir(pathResolver))
+	configDir := resolveConfigDir(pathResolver)
+	configRepo := fsrepo.NewDomainConfigRepository(configDir)
+	settingsRepo := fsrepo.NewSettingsRepository(configDir)
 	envWriter := fsrepo.NewFSDomainEnvWriter(pathResolver)
 	vhostRenderer := rendering.NewVHostRenderer()
 	systemdRenderer := rendering.NewSystemdRenderer()
@@ -49,8 +51,10 @@ func main() {
 	getConfigUC := usecases.NewGetDomainConfigUseCase(configRepo)
 	allocatePortUC := usecases.NewAllocateOperationPortUseCase(configRepo)
 	saveConfigUC := usecases.NewSaveDomainConfigUseCase(configRepo, envWriter, allocatePortUC)
+	getSettingsUC := usecases.NewGetSettingsUseCase(settingsRepo)
+	saveSettingsUC := usecases.NewSaveSettingsUseCase(settingsRepo)
 	renderProvisionUC := usecases.NewRenderProvisioningUseCase(vhostRenderer, systemdRenderer)
-	applyProvisionUC := usecases.NewApplyProvisioningUseCase(renderProvisionUC, provisioningApplier)
+	applyProvisionUC := usecases.NewApplyProvisioningUseCase(renderProvisionUC, provisioningApplier, getSettingsUC)
 
 	// 3. Presentation / UI Layer (consumes only contracts)
 	rootModel := app.NewRootModel(
@@ -65,6 +69,8 @@ func main() {
 		renderProvisionUC,
 		allocatePortUC,
 		applyProvisionUC,
+		getSettingsUC,
+		saveSettingsUC,
 	)
 
 	p := tea.NewProgram(rootModel, tea.WithAltScreen())

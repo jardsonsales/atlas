@@ -10,6 +10,7 @@ import (
 	"atlas/internal/ui/actions"
 	"atlas/internal/ui/components/domainconfig"
 	"atlas/internal/ui/components/domainselector"
+	"atlas/internal/ui/components/settings"
 	"atlas/internal/ui/components/systemcheck"
 	uicontracts "atlas/internal/ui/contracts"
 	"atlas/internal/ui/styles"
@@ -28,6 +29,8 @@ const (
 	phaseDomain
 	// phaseDomainConfig shows the configuration form for the selected domain.
 	phaseDomainConfig
+	// phaseSettings shows the global Atlas settings (certbot contact e-mail).
+	phaseSettings
 )
 
 // RootModel orchestrates the global UI state and child components.
@@ -36,6 +39,7 @@ type RootModel struct {
 	systemCheck       uicontracts.Component
 	selector          uicontracts.Component
 	configForm        uicontracts.Component
+	settingsForm      uicontracts.Component
 	selectedDomain    *entities.Domain
 	audit             *entities.DomainAudit
 	auditError        string
@@ -53,6 +57,8 @@ type RootModel struct {
 	renderProvisionUC contracts.RenderProvisioningUseCase
 	allocatePortUC    contracts.AllocateOperationPortUseCase
 	applyProvisionUC  contracts.ApplyProvisioningUseCase
+	getSettingsUC     contracts.GetSettingsUseCase
+	saveSettingsUC    contracts.SaveSettingsUseCase
 	phase             phase
 }
 
@@ -69,6 +75,8 @@ func NewRootModel(
 	renderProvisionUC contracts.RenderProvisioningUseCase,
 	allocatePortUC contracts.AllocateOperationPortUseCase,
 	applyProvisionUC contracts.ApplyProvisioningUseCase,
+	getSettingsUC contracts.GetSettingsUseCase,
+	saveSettingsUC contracts.SaveSettingsUseCase,
 ) *RootModel {
 	return &RootModel{
 		ctx:               ctx,
@@ -81,6 +89,8 @@ func NewRootModel(
 		renderProvisionUC: renderProvisionUC,
 		allocatePortUC:    allocatePortUC,
 		applyProvisionUC:  applyProvisionUC,
+		getSettingsUC:     getSettingsUC,
+		saveSettingsUC:    saveSettingsUC,
 		phase:             phaseSystemCheck,
 	}
 }
@@ -106,10 +116,22 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.configForm, cmd = m.configForm.Update(msg)
 			return m, cmd
 		}
+		// The settings screen owns every other key while it is open (text editing included).
+		if m.phase == phaseSettings {
+			var cmd tea.Cmd
+			m.settingsForm, cmd = m.settingsForm.Update(msg)
+			return m, cmd
+		}
 		switch msg.String() {
 		case "q":
 			if m.selectedDomain != nil || m.phase != phaseSelector || !m.selector.IsInputActive() {
 				return m, tea.Quit
+			}
+		case "s":
+			if m.phase == phaseSelector && !m.selector.IsInputActive() {
+				m.settingsForm = settings.New(m.ctx, m.getSettingsUC, m.saveSettingsUC)
+				m.phase = phaseSettings
+				return m, m.settingsForm.Init()
 			}
 		case "c":
 			if m.selectedDomain != nil && m.phase == phaseDomain {
@@ -184,6 +206,11 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configForm = nil
 		return m, nil
 
+	case actions.SettingsClosedMsg:
+		m.phase = phaseSelector
+		m.settingsForm = nil
+		return m, nil
+
 	case actions.ConfigErrorMsg:
 		// While the form is open it renders its own errors; otherwise surface load failures.
 		if m.phase != phaseDomainConfig {
@@ -236,6 +263,10 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.configForm, cmd = m.configForm.Update(msg)
 		return m, cmd
+	case phaseSettings:
+		var cmd tea.Cmd
+		m.settingsForm, cmd = m.settingsForm.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -252,12 +283,14 @@ func (m *RootModel) View() string {
 		b.WriteString(styles.FooterText.Render("• [enter] Continue  • [q / ctrl+c] Quit"))
 	case m.phase == phaseDomainConfig:
 		b.WriteString(m.configForm.View())
+	case m.phase == phaseSettings:
+		b.WriteString(m.settingsForm.View())
 	case m.selectedDomain != nil:
 		b.WriteString(m.renderSelectedDomain() + "\n")
 		b.WriteString(styles.FooterText.Render("• [c] Configure  • [a] Apply plan  • [b / backspace] Switch domain  • [q / ctrl+c] Quit"))
 	default:
 		b.WriteString(m.selector.View() + "\n")
-		b.WriteString(styles.FooterText.Render("• [↑/↓ or j/k] Navigate  • [/] Filter  • [r] Rescan  • [enter] Select  • [q] Quit"))
+		b.WriteString(styles.FooterText.Render("• [↑/↓ or j/k] Navigate  • [/] Filter  • [r] Rescan  • [enter] Select  • [s] Settings  • [q] Quit"))
 	}
 
 	return styles.AppContainer.Render(b.String())

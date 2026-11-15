@@ -67,14 +67,17 @@ the TLS certificate with certbot and installs/enables the backend systemd unit. 
 the filesystem changes are still written, but the `nginx`/`apachectl`/`systemctl`/`certbot`
 commands are skipped.
 
+From the domain list press `s` to open **Settings**, where you can set the certbot contact
+e-mail used to register the TLS certificate. Leave it empty and Atlas registers with
+`--register-unsafely-without-email`; fill it in and it is passed to certbot as `-m <email>`.
+
 Environment variables:
 
-| Variable              | Purpose                                                                        |
-| --------------------- | ------------------------------------------------------------------------------ |
-| `ATLAS_ROOT_DIR`      | Root filesystem Atlas maps virtual paths onto (defaults to `/`).                  |
-| `ATLAS_CONFIG_DIR`    | Override the config store (defaults to `~/.config/atlas`).                       |
-| `ATLAS_CERTBOT_EMAIL` | Registration email passed to certbot (`-m`); without it Atlas uses `--register-unsafely-without-email`. |
-| `CLICOLOR_FORCE`      | Set to `1` to force colors over SSH or in CI.                                   |
+| Variable           | Purpose                                                          |
+| ------------------ | ---------------------------------------------------------------- |
+| `ATLAS_ROOT_DIR`   | Root filesystem Atlas maps virtual paths onto (defaults to `/`). |
+| `ATLAS_CONFIG_DIR` | Override the config store (defaults to `~/.config/atlas`).       |
+| `CLICOLOR_FORCE`   | Set to `1` to force colors over SSH or in CI.                    |
 
 ## Build from source
 
