@@ -155,8 +155,8 @@ func (f *ConfigForm) applyDefaults() {
 	defaults := entities.DefaultSystemdService()
 	f.systemdEnabled = false
 	f.description = f.domain
-	f.workingDir = "/var/www/" + f.domain
-	f.environmentFile = ""
+	f.workingDir = f.domainRoot()
+	f.environmentFile = f.domainEnvFile()
 	f.sysUser = defaults.User()
 	f.sysGroup = defaults.Group()
 	f.restart = defaults.Restart()
@@ -199,6 +199,9 @@ func (f *ConfigForm) applySaved(saved *entities.DomainConfig) {
 	f.description = service.Description()
 	f.workingDir = service.WorkingDirectory()
 	f.environmentFile = service.EnvironmentFile()
+	if f.environmentFile == "" {
+		f.environmentFile = f.domainEnvFile()
+	}
 	f.sysUser = service.User()
 	f.sysGroup = service.Group()
 	f.restart = service.Restart()
@@ -304,7 +307,7 @@ func (f *ConfigForm) rebuildRows() {
 			rows = append(rows,
 				textRow("description", "Description", func() string { return f.description }, func(v string) { f.description = v }, "e.g. 4001 - myapp"),
 				textRow("workingdir", "WorkingDirectory", func() string { return f.workingDir }, func(v string) { f.workingDir = v }, "e.g. /opt/myapp"),
-				textRow("envfile", "EnvironmentFile", func() string { return f.environmentFile }, func(v string) { f.environmentFile = v }, "e.g. /etc/myapp.env"),
+				textRow("envfile", "EnvironmentFile", func() string { return f.environmentFile }, func(v string) { f.environmentFile = v }, "app env file (default: the domain .env)"),
 				textRow("user", "User", func() string { return f.sysUser }, func(v string) { f.sysUser = v }, "e.g. www-data"),
 				textRow("group", "Group", func() string { return f.sysGroup }, func(v string) { f.sysGroup = v }, "e.g. www-data"),
 				textRow("restart", "Restart", func() string { return f.restart }, func(v string) { f.restart = v }, "always / on-failure / no"),
@@ -648,6 +651,9 @@ func (f *ConfigForm) operationPortLabel() string {
 
 // domainRoot returns the virtual root directory of the domain (/var/www/<domain>).
 func (f *ConfigForm) domainRoot() string { return "/var/www/" + f.domain }
+
+// domainEnvFile returns the conventional .env path of the domain, the default EnvironmentFile.
+func (f *ConfigForm) domainEnvFile() string { return f.domainRoot() + "/.env" }
 
 // derivedExecStartLabel shows the ExecStart Atlas builds from the entry point binary.
 func (f *ConfigForm) derivedExecStartLabel() string {
