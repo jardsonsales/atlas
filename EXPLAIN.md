@@ -132,8 +132,8 @@ atlas --restart <domain>
   non-zero on failure, so your pipeline aborts when the service does not come back up.
 - It only restarts the backend unit — the vhost, TLS certificate and `.env` are left untouched.
 - It requires no TUI and no extra flags; run it as `root` (same as provisioning).
-- On a machine where the domain was never provisioned (no unit yet), the restart fails — only
-  call it for a domain that has an enabled backend (reverse-proxy apps).
+- On a machine where the domain has no installed unit, the restart is a no-op reported as
+  **skipped** (it does not fail), so you can call it for any domain.
 
 So: **provision once** (in the Atlas TUI, then a human writes `.env`) and on every later deploy
 run the full workflow ending in **`atlas --restart <domain>`**.
@@ -145,7 +145,7 @@ serves the app directly.
 - Put the document root in `public/` with an entry file: `index.php` (socket/PHP) and/or
   `index.html` (static).
 - The PHP-FPM socket model targets `unix:/var/run/php/php<version>-fpm.sock`.
-- These models have no systemd unit, so `atlas --restart` does not apply to them.
+- These models have no systemd unit, so `atlas --restart` is a harmless no-op (reported as skipped).
 
 ## 6. What Atlas does for you
 

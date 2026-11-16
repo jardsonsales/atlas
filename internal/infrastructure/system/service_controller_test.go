@@ -3,16 +3,36 @@ package system
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"atlas/internal/domain/entities"
 	"atlas/internal/infrastructure/filesystem"
 )
 
+// seedUnit writes a backend unit file into the resolver sandbox so the restart finds it.
+func seedUnit(t *testing.T, root, unit string) {
+	t.Helper()
+	dir := filepath.Join(root, "etc", "systemd", "system")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to seed the unit directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, unit), []byte("[Unit]\n"), 0o644); err != nil {
+		t.Fatalf("failed to seed the unit file: %v", err)
+	}
+}
+
 func TestServiceControllerRestartsUnit(t *testing.T) {
 	ctx := context.Background()
+	root := t.TempDir()
+	seedUnit(t, root, "nexus.example.com.service")
 	runner := &fakeRunner{}
-	controller := &fsServiceController{runner: runner, runCommands: true}
+	controller := &fsServiceController{
+		resolver:    filesystem.NewPathResolver(root),
+		runner:      runner,
+		runCommands: true,
+	}
 
 	result, err := controller.Restart(ctx, "nexus.example.com")
 	if err != nil {
@@ -35,10 +55,38 @@ func TestServiceControllerRestartsUnit(t *testing.T) {
 	}
 }
 
+func TestServiceControllerSkipsWhenUnitMissing(t *testing.T) {
+	ctx := context.Background()
+	runner := &fakeRunner{}
+	controller := &fsServiceController{
+		resolver:    filesystem.NewPathResolver(t.TempDir()),
+		runner:      runner,
+		runCommands: true,
+	}
+
+	result, err := controller.Restart(ctx, "solaris.example.com")
+	if err != nil {
+		t.Fatalf("unexpected restart error: %v", err)
+	}
+	if !result.Succeeded() {
+		t.Errorf("expected a successful result, got %+v", result.Steps())
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("expected no command to run without a unit, got %+v", runner.calls)
+	}
+	if got := result.Steps()[0].Status(); got != entities.StepSkipped {
+		t.Errorf("expected a skipped step, got %q", got)
+	}
+}
+
 func TestServiceControllerSkipsInSandbox(t *testing.T) {
 	ctx := context.Background()
 	runner := &fakeRunner{}
-	controller := &fsServiceController{runner: runner, runCommands: false}
+	controller := &fsServiceController{
+		resolver:    filesystem.NewPathResolver(t.TempDir()),
+		runner:      runner,
+		runCommands: false,
+	}
 
 	result, err := controller.Restart(ctx, "nexus.example.com")
 	if err != nil {
@@ -54,8 +102,14 @@ func TestServiceControllerSkipsInSandbox(t *testing.T) {
 
 func TestServiceControllerReportsFailure(t *testing.T) {
 	ctx := context.Background()
+	root := t.TempDir()
+	seedUnit(t, root, "nexus.example.com.service")
 	runner := &fakeRunner{fail: map[string]error{"systemctl": errors.New("Unit nexus.example.com.service not found")}}
-	controller := &fsServiceController{runner: runner, runCommands: true}
+	controller := &fsServiceController{
+		resolver:    filesystem.NewPathResolver(root),
+		runner:      runner,
+		runCommands: true,
+	}
 
 	result, err := controller.Restart(ctx, "nexus.example.com")
 	if err == nil {
